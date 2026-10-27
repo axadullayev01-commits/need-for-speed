@@ -138,6 +138,46 @@ export function getTrackProgress(x, z) {
 }
 
 /**
+ * Checks if a car crosses the start/finish line and tracks waypoint visits.
+ * Start/finish line is at z = 0, between x = -24 and x = 24.
+ * Direction of race is from negative Z towards positive Z.
+ */
+export function checkLapProgressAndCrossing(player, prevX, prevZ, currX, currZ) {
+  if (!player.visitedWaypoints) {
+    player.visitedWaypoints = new Set();
+  }
+
+  // 1. Record waypoint visits around the circuit
+  for (let i = 0; i < CIRCUIT_WAYPOINTS.length; i++) {
+    const wp = CIRCUIT_WAYPOINTS[i];
+    const dx = currX - wp.x;
+    const dz = currZ - wp.z;
+    if (dx * dx + dz * dz < 45 * 45) {
+      player.visitedWaypoints.add(i);
+    }
+  }
+
+  // 2. Check if car crosses the Finish Line plane (z = 0) from z < 0 to z >= 0
+  const crossedLine = prevZ < 0 && currZ >= 0 && Math.abs(currX) <= 24;
+
+  if (crossedLine) {
+    if (!player.hasStartedRace) {
+      // First crossing right after start grid
+      player.hasStartedRace = true;
+      player.visitedWaypoints.clear();
+      return { started: true, lapCompleted: false };
+    }
+
+    // Must have visited at least 5 checkpoints across the circuit
+    if (player.visitedWaypoints.size >= 5) {
+      return { started: true, lapCompleted: true };
+    }
+  }
+
+  return { started: Boolean(player.hasStartedRace), lapCompleted: false };
+}
+
+/**
  * Checks if a car has crossed a given checkpoint gate in the forward direction.
  */
 export function hasCrossedCheckpoint(prevX, prevZ, currX, currZ, checkpoint) {

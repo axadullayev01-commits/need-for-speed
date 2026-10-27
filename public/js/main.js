@@ -238,6 +238,10 @@ class GameApp {
     this.raceStartTime = startData.startTime || Date.now();
     this.totalLaps = startData.totalLaps || 3;
     this.ui.showGameHUD();
+    this.ui.updateLap(0, this.totalLaps);
+    if (this.ui.finishBanner) {
+      this.ui.finishBanner.style.display = 'none';
+    }
   }
 
   onServerSnapshot(snapshot) {
@@ -250,10 +254,19 @@ class GameApp {
       if (serverLocal.colliding) {
         this.audio.playCollision();
       }
+      if (serverLocal.finished && this.state !== 'FINISHED') {
+        this.onPlayerFinished({
+          playerId: this.localPlayerId,
+          name: serverLocal.name || 'Driver',
+          rank: serverLocal.finishRank || 1,
+          finishTime: 0,
+          leaderboard: snapshot.leaderboard
+        });
+      }
     }
 
-    // 2. Buffer remote snapshots for interpolation
-    this.prediction.bufferRemoteSnapshot(snapshot.players, snapshot.timestamp);
+    // 2. Buffer remote snapshots for smooth interpolation
+    this.prediction.bufferRemoteSnapshot(snapshot.players);
 
     // 3. Update HUD Leaderboard & Positions
     if (snapshot.leaderboard) {
@@ -263,26 +276,49 @@ class GameApp {
       if (localEntry) {
         this.ui.updatePosition(localEntry.rank, snapshot.leaderboard.length);
       }
+
+      if (this.state === 'FINISHED' && this.ui.resultsModal.style.display === 'flex') {
+        this.ui.showResultsPodium(snapshot.leaderboard, this.localPlayerId);
+      }
     }
   }
 
   onLapComplete(data) {
-    this.ui.updateLap(data.lap, data.totalLaps);
+    if (data.playerId === this.localPlayerId) {
+      this.ui.updateLap(data.completedLaps, data.totalLaps);
+    }
   }
 
   onPlayerFinished(data) {
     console.log(`Player ${data.name} finished at rank #${data.rank} in ${data.finishTime}s!`);
+    if (data.playerId === this.localPlayerId) {
+      this.state = 'FINISHED';
+      this.audio.stopEngine();
+      this.ui.updateLap(this.totalLaps, this.totalLaps);
+      this.ui.showPlayerFinishedBanner(data.rank, data.finishTime);
+      setTimeout(() => {
+        this.ui.showResultsPodium(data.leaderboard, this.localPlayerId);
+      }, 2500);
+    } else if (this.state === 'FINISHED') {
+      this.ui.showResultsPodium(data.leaderboard, this.localPlayerId);
+    }
   }
 
   onRaceFinished(data) {
     this.state = 'FINISHED';
     this.audio.stopEngine();
-    this.ui.showResultsPodium(data.leaderboard);
+    this.ui.showResultsPodium(data.leaderboard, this.localPlayerId);
   }
 
   cleanupRace() {
     this.state = 'MENU';
     this.audio.stopEngine();
+    if (this.ui.finishBanner) {
+      this.ui.finishBanner.style.display = 'none';
+    }
+    if (this.ui.resultsModal) {
+      this.ui.resultsModal.style.display = 'none';
+    }
     if (this.localCar) {
       this.localCar.destroy();
       this.localCar = null;
@@ -332,6 +368,11 @@ class GameApp {
       // 7. Update Race Elapsed Time
       const elapsed = (Date.now() - this.raceStartTime) / 1000;
       this.ui.updateRaceTime(elapsed);
+    } else if (this.state === 'FINISHED' && this.localCar && this.prediction.predictedState) {
+      // Finished state: smoothly bring car to halt
+      this.prediction.predictedState.speed = Math.max(0, (this.prediction.predictedState.speed || 0) * 0.9);
+      this.localCar.updateVisuals(this.prediction.predictedState, dt);
+      this.ui.updateSpeedometer(this.prediction.predictedState.speed);
     }
 
     // Update Remote Players via Entity Interpolation

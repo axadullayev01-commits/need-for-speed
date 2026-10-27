@@ -564,6 +564,50 @@ body, html {
   display: none;
 }
 
+.finish-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 34px;
+  font-weight: 900;
+  text-align: center;
+  padding: 18px 32px;
+  border-radius: 14px;
+  background: rgba(10, 15, 25, 0.96);
+  border: 2px solid #ffe600;
+  color: #ffe600;
+  box-shadow: 0 0 45px rgba(255, 230, 0, 0.6);
+  animation: pulseScale 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  letter-spacing: 2px;
+  max-width: 580px;
+  margin: 0 auto;
+  pointer-events: auto;
+}
+
+.finish-badge.gold {
+  color: #ffe600;
+  border-color: #ffe600;
+  box-shadow: 0 0 55px rgba(255, 230, 0, 0.8);
+}
+
+.finish-badge.silver {
+  color: #e2e8f0;
+  border-color: #e2e8f0;
+  box-shadow: 0 0 55px rgba(226, 232, 240, 0.8);
+}
+
+.finish-badge.bronze {
+  color: #f97316;
+  border-color: #f97316;
+  box-shadow: 0 0 55px rgba(249, 115, 22, 0.8);
+}
+
+.finish-badge .sub-rank {
+  font-size: 16px;
+  color: #94a3b8;
+  margin-top: 6px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
 .drift-badge {
   font-family: 'Orbitron', sans-serif;
   font-size: 26px;

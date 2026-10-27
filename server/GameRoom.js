@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { CHECKPOINTS, START_GRID_SLOTS, getTrackProgress, hasCrossedCheckpoint } from './TrackData.js';
+import { CHECKPOINTS, START_GRID_SLOTS, getTrackProgress, checkLapProgressAndCrossing } from './TrackData.js';
 import { createCarPhysicsState, stepCarPhysics, resolveCarToCarCollisions } from './PhysicsEngine.js';
 
 export class GameRoom {
@@ -61,9 +61,10 @@ export class GameRoom {
       physics: createCarPhysicsState(spawnSlot),
       inputQueue: [],
       lastProcessedInputSeq: 0,
+      completedLaps: 0,
       currentLap: 1,
-      currentCheckpointIndex: 0,
-      checkpointPassedCount: 0,
+      hasStartedRace: false,
+      visitedWaypoints: new Set(),
       lapTimes: [],
       lapStartTime: 0,
       finishRank: 0,
@@ -130,7 +131,7 @@ export class GameRoom {
    */
   receiveInput(socketId, inputPayload) {
     const player = this.players.get(socketId);
-    if (!player || this.status !== 'RACING') return;
+    if (!player || this.status !== 'RACING' || player.finished) return;
 
     // Payload: { seq, throttle, steer, brake, handbrake }
     if (typeof inputPayload?.seq === 'number') {
@@ -147,18 +148,17 @@ export class GameRoom {
    */
   resetCar(socketId) {
     const player = this.players.get(socketId);
-    if (!player || this.status !== 'RACING') return;
+    if (!player || this.status !== 'RACING' || player.finished) return;
 
-    const cp = CHECKPOINTS[player.currentCheckpointIndex];
-    player.physics.x = cp.x;
-    player.physics.z = cp.z;
+    const progress = getTrackProgress(player.physics.x, player.physics.z);
+    const pt = progress.closestPoint;
+    player.physics.x = pt.x;
+    player.physics.z = pt.z;
     player.physics.vx = 0;
     player.physics.vz = 0;
     player.physics.speed = 0;
     player.physics.lateralSpeed = 0;
     player.physics.angularVelocity = 0;
-    // Align with checkpoint forward tangent
-    player.physics.angle = Math.atan2(cp.dirX, cp.dirZ);
   }
 
   /**
@@ -179,9 +179,10 @@ export class GameRoom {
     for (const player of this.players.values()) {
       const spawnSlot = START_GRID_SLOTS[slot % START_GRID_SLOTS.length];
       player.physics = createCarPhysicsState(spawnSlot);
+      player.completedLaps = 0;
       player.currentLap = 1;
-      player.currentCheckpointIndex = 0;
-      player.checkpointPassedCount = 0;
+      player.hasStartedRace = false;
+      player.visitedWaypoints = new Set();
       player.lapTimes = [];
       player.finishRank = 0;
       player.finished = false;
@@ -243,8 +244,15 @@ export class GameRoom {
 
     // 1. Process inputs and step physics for each player
     for (const player of this.players.values()) {
+      player.physics.colliding = false;
       player.prevX = player.physics.x;
       player.prevZ = player.physics.z;
+
+      if (player.finished) {
+        // Player has finished race - bring their car smoothly to rest
+        stepCarPhysics(player.physics, { throttle: 0, steer: 0, brake: 1, handbrake: true }, dt);
+        continue;
+      }
 
       // Drain queued inputs
       if (player.inputQueue.length > 0) {
@@ -258,55 +266,53 @@ export class GameRoom {
         stepCarPhysics(player.physics, { throttle: 0, steer: 0, brake: 0, handbrake: false }, dt);
       }
 
-      // 2. Checkpoint and Lap Verification
-      if (!player.finished) {
-        const nextCp = CHECKPOINTS[player.currentCheckpointIndex];
-        const crossed = hasCrossedCheckpoint(
-          player.prevX,
-          player.prevZ,
-          player.physics.x,
-          player.physics.z,
-          nextCp
-        );
+      // 2. Lap & Finish Line Verification
+      const lapResult = checkLapProgressAndCrossing(
+        player,
+        player.prevX,
+        player.prevZ,
+        player.physics.x,
+        player.physics.z
+      );
 
-        if (crossed) {
-          player.checkpointPassedCount++;
-          player.currentCheckpointIndex = (player.currentCheckpointIndex + 1) % CHECKPOINTS.length;
+      if (lapResult.lapCompleted) {
+        player.completedLaps++;
+        player.visitedWaypoints.clear();
+        const lapTime = (now - player.lapStartTime) / 1000;
+        player.lapTimes.push(lapTime);
+        player.lapStartTime = now;
 
-          // If crossed start/finish line (Checkpoint 0)
-          if (player.currentCheckpointIndex === 0) {
-            const lapTime = (now - player.lapStartTime) / 1000;
-            player.lapTimes.push(lapTime);
-            player.lapStartTime = now;
+        if (player.completedLaps >= this.totalLaps) {
+          // Player finished race!
+          this.finishCount++;
+          player.finished = true;
+          player.finishRank = this.finishCount;
+          player.finishTime = (now - this.raceStartTime) / 1000;
 
-            if (player.currentLap >= this.totalLaps) {
-              // Player finished race!
-              this.finishCount++;
-              player.finished = true;
-              player.finishRank = this.finishCount;
-              player.finishTime = (now - this.raceStartTime) / 1000;
+          const currentLeaderboard = this.calculateLeaderboard();
 
-              this.io.to(this.id).emit('player_finished', {
-                playerId: player.id,
-                name: player.name,
-                rank: player.finishRank,
-                finishTime: player.finishTime,
-                lapTimes: player.lapTimes
-              });
+          this.io.to(this.id).emit('player_finished', {
+            playerId: player.id,
+            name: player.name,
+            rank: player.finishRank,
+            finishTime: player.finishTime,
+            lapTimes: player.lapTimes,
+            leaderboard: currentLeaderboard
+          });
 
-              // If all players have finished, end race
-              if (this.finishCount >= this.players.size) {
-                this.finishRace();
-              }
-            } else {
-              player.currentLap++;
-              this.io.to(player.id).emit('lap_complete', {
-                lap: player.currentLap,
-                totalLaps: this.totalLaps,
-                lapTime
-              });
-            }
+          // If all players have finished, end race
+          if (this.finishCount >= this.players.size) {
+            this.finishRace();
           }
+        } else {
+          player.currentLap = player.completedLaps + 1;
+          this.io.to(this.id).emit('lap_complete', {
+            playerId: player.id,
+            completedLaps: player.completedLaps,
+            currentLap: player.currentLap,
+            totalLaps: this.totalLaps,
+            lapTime
+          });
         }
       }
     }
@@ -346,6 +352,7 @@ export class GameRoom {
         isOffTrack: player.physics.isOffTrack,
         colliding: player.physics.colliding,
         lastProcessedInputSeq: player.lastProcessedInputSeq,
+        completedLaps: player.completedLaps || 0,
         currentLap: player.currentLap,
         finished: player.finished,
         finishRank: player.finishRank
@@ -363,14 +370,15 @@ export class GameRoom {
       const progress = getTrackProgress(p.physics.x, p.physics.z);
       // Continuous race score for ordering
       const score = p.finished
-        ? 1000000 - p.finishRank
-        : (p.currentLap * 10000) + (p.checkpointPassedCount * 100) + progress.progressRatio;
+        ? 10000000 - (p.finishRank * 100000)
+        : ((p.completedLaps || 0) * 10000) + (progress.progressRatio * 1000);
 
       return {
         id: p.id,
         name: p.name,
         color: p.color,
-        lap: p.currentLap,
+        completedLaps: p.completedLaps || 0,
+        lap: Math.min((p.completedLaps || 0) + 1, this.totalLaps),
         score,
         finished: p.finished,
         finishRank: p.finishRank,
@@ -381,11 +389,12 @@ export class GameRoom {
     list.sort((a, b) => b.score - a.score);
 
     return list.map((item, index) => ({
-      rank: index + 1,
+      rank: item.finished ? item.finishRank : (index + 1),
       id: item.id,
       name: item.name,
       color: item.color,
-      lap: Math.min(item.lap, this.totalLaps),
+      completedLaps: item.completedLaps,
+      lap: item.lap,
       finished: item.finished,
       finishRank: item.finishRank,
       finishTime: item.finishTime

@@ -205,8 +205,20 @@ export class CarModel {
     if (!physicsState) return;
 
     // 1. Position & Yaw Heading
-    this.mesh.position.set(physicsState.x, 0, physicsState.z);
-    this.mesh.rotation.y = physicsState.angle;
+    if (this.isLocal) {
+      this.mesh.position.set(physicsState.x, 0, physicsState.z);
+      this.mesh.rotation.y = physicsState.angle;
+    } else {
+      // Smooth remote entity positioning to eliminate all packet jitter
+      const smoothFactor = Math.min(1, 24 * (dt || 0.016));
+      this.mesh.position.x += (physicsState.x - this.mesh.position.x) * smoothFactor;
+      this.mesh.position.z += (physicsState.z - this.mesh.position.z) * smoothFactor;
+
+      let angleDiff = physicsState.angle - this.mesh.rotation.y;
+      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+      this.mesh.rotation.y += angleDiff * smoothFactor;
+    }
 
     // Body roll / tilt during hard turns and drifts
     const steerRoll = (physicsState.steerAngle || 0) * (physicsState.speed / 50) * -0.06;

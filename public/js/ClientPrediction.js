@@ -177,8 +177,8 @@ export class ClientPrediction {
     const dz = this.predictedState.z - serverPlayer.z;
     const errorDist = Math.hypot(dx, dz);
 
-    // If drift error exceeds 0.2 units, perform reconciliation replay
-    if (errorDist > 0.2) {
+    // Hard snap threshold (collision or large teleports / reset)
+    if (errorDist > 3.5) {
       // Reset state to server's confirmed state
       this.predictedState.x = serverPlayer.x;
       this.predictedState.z = serverPlayer.z;
@@ -192,8 +192,11 @@ export class ClientPrediction {
         this.stepLocalPhysics(this.predictedState, this.pendingInputs[i].input, dt);
         this.pendingInputs[i].state = { ...this.predictedState };
       }
-    } else {
-      // Soft-correct tiny discrepancies smoothly
+    } else if (errorDist > 0.04) {
+      // Soft-correct small discrepancies smoothly (no jarring snaps or jitter)
+      this.predictedState.x = lerp(this.predictedState.x, serverPlayer.x, 0.12);
+      this.predictedState.z = lerp(this.predictedState.z, serverPlayer.z, 0.12);
+      this.predictedState.angle = lerpAngle(this.predictedState.angle, serverPlayer.angle, 0.15);
       this.predictedState.speed = lerp(this.predictedState.speed, serverPlayer.speed, 0.2);
     }
 
@@ -204,9 +207,11 @@ export class ClientPrediction {
   }
 
   /**
-   * Buffers remote player states received from server snapshots
+   * Buffers remote player states received from server snapshots using local monotonic clock
    */
-  bufferRemoteSnapshot(players, timestamp) {
+  bufferRemoteSnapshot(players) {
+    const localTime = performance.now();
+
     for (const [id, player] of Object.entries(players)) {
       if (id === this.localPlayerId) continue;
 
@@ -215,50 +220,58 @@ export class ClientPrediction {
       }
 
       const buffer = this.remoteSnapshots.get(id);
-      buffer.push({ timestamp, state: player });
+      buffer.push({ localTime, state: player });
 
-      // Keep recent 1.5 seconds of history
-      const cutoff = timestamp - 1500;
-      while (buffer.length > 2 && buffer[0].timestamp < cutoff) {
+      // Keep recent 12 snapshots (~400ms)
+      while (buffer.length > 12) {
         buffer.shift();
       }
     }
   }
 
   /**
-   * Interpolates a remote player between recorded snapshots for butter-smooth 60fps rendering
+   * Interpolates a remote player between recorded snapshots for butter-smooth rendering
    */
   getInterpolatedRemoteState(playerId) {
     const buffer = this.remoteSnapshots.get(playerId);
     if (!buffer || buffer.length === 0) return null;
+    if (buffer.length === 1) return buffer[0].state;
 
-    const renderTime = Date.now() - this.interpolationDelayMs;
+    // Fixed 80ms interpolation delay (approx 2.4 server snapshot intervals at 30Hz)
+    const renderTime = performance.now() - 80;
 
     // If renderTime is older than our oldest snapshot, return oldest
-    if (renderTime <= buffer[0].timestamp) {
+    if (renderTime <= buffer[0].localTime) {
       return buffer[0].state;
     }
 
-    // If renderTime is newer than newest snapshot, return newest
-    if (renderTime >= buffer[buffer.length - 1].timestamp) {
-      return buffer[buffer.length - 1].state;
+    // If renderTime is newer than newest snapshot, extrapolate smoothly using latest velocity
+    const newest = buffer[buffer.length - 1];
+    if (renderTime >= newest.localTime) {
+      const dtExtrap = Math.min((renderTime - newest.localTime) / 1000, 0.1);
+      const angle = newest.state.angle || 0;
+      const speed = newest.state.speed || 0;
+      return {
+        ...newest.state,
+        x: newest.state.x + Math.sin(angle) * speed * dtExtrap,
+        z: newest.state.z + Math.cos(angle) * speed * dtExtrap
+      };
     }
 
     // Find surrounding snapshots [s0, s1]
     let s0 = buffer[0];
-    let s1 = buffer[1];
+    let s1 = buffer[buffer.length - 1];
     for (let i = 0; i < buffer.length - 1; i++) {
-      if (buffer[i].timestamp <= renderTime && renderTime <= buffer[i + 1].timestamp) {
+      if (buffer[i].localTime <= renderTime && renderTime <= buffer[i + 1].localTime) {
         s0 = buffer[i];
         s1 = buffer[i + 1];
         break;
       }
     }
 
-    const duration = s1.timestamp - s0.timestamp || 1;
-    const t = Math.max(0, Math.min(1, (renderTime - s0.timestamp) / duration));
+    const duration = s1.localTime - s0.localTime;
+    const t = duration > 0 ? Math.max(0, Math.min(1, (renderTime - s0.localTime) / duration)) : 1;
 
-    // Spherical / linear interpolation
     return {
       id: playerId,
       x: lerp(s0.state.x, s1.state.x, t),

@@ -20,6 +20,7 @@ export class UIManager {
     this.raceTime = document.getElementById('hud-race-time');
     this.leaderboardList = document.getElementById('leaderboard-list');
     this.countdownBanner = document.getElementById('countdown-banner');
+    this.finishBanner = document.getElementById('finish-banner');
     this.driftBanner = document.getElementById('drift-banner');
     this.pingDisplay = document.getElementById('ping-display');
 
@@ -306,24 +307,58 @@ export class UIManager {
     }
   }
 
-  showResultsPodium(leaderboard) {
+  showPlayerFinishedBanner(rank, finishTime) {
+    if (!this.finishBanner) {
+      this.finishBanner = document.getElementById('finish-banner');
+    }
+    if (!this.finishBanner) return;
+
+    let title = '';
+    let badgeClass = '';
+    let subtitle = finishTime ? `Vaqt: ${finishTime.toFixed(2)}s` : 'Poyga yakunlandi';
+
+    if (rank === 1) {
+      title = '🏆 1-O\'RIN! SIZ G\'OLIB BO\'LDINGIZ!';
+      badgeClass = 'gold';
+    } else if (rank === 2) {
+      title = '🥈 2-O\'RIN! AJOYIB NATIJA!';
+      badgeClass = 'silver';
+    } else if (rank === 3) {
+      title = '🥉 3-O\'RIN!';
+      badgeClass = 'bronze';
+    } else {
+      title = `🏁 MARRAGA YETIB KELDINGIZ (#${rank}-O'RIN)`;
+      badgeClass = 'silver';
+    }
+
+    this.finishBanner.className = `finish-badge ${badgeClass}`;
+    this.finishBanner.innerHTML = `
+      <div>${title}</div>
+      <div class="sub-rank">${subtitle}</div>
+    `;
+    this.finishBanner.style.display = 'block';
+  }
+
+  showResultsPodium(leaderboard, localPlayerId) {
     this.resultsModal.style.display = 'flex';
     this.resultsTableBody.innerHTML = '';
 
     (leaderboard || []).forEach(item => {
+      const isMe = item.id === localPlayerId;
       const tr = document.createElement('tr');
+      if (isMe) tr.style.background = 'rgba(0, 229, 255, 0.15)';
 
       let rankClass = '';
       if (item.rank === 1) rankClass = 'rank-gold';
       else if (item.rank === 2) rankClass = 'rank-silver';
       else if (item.rank === 3) rankClass = 'rank-bronze';
 
-      const timeText = item.finishTime ? `${item.finishTime.toFixed(2)}s` : 'DNF';
+      const timeText = item.finishTime ? `${item.finishTime.toFixed(2)}s` : (item.finished ? 'FINISHED' : `Aylana ${item.completedLaps || 0}/3`);
 
       tr.innerHTML = `
         <td class="${rankClass}">#${item.rank}</td>
-        <td style="color:${item.color}; font-weight:700;">${item.name}</td>
-        <td>${item.finished ? 'FINISHED' : `Lap ${item.lap}`}</td>
+        <td style="color:${item.color}; font-weight:700;">${item.name} ${isMe ? '(Siz)' : ''}</td>
+        <td>${item.finished ? '🏁 FINISHED' : `Aylana ${item.completedLaps || 0}/3`}</td>
         <td>${timeText}</td>
       `;
       this.resultsTableBody.appendChild(tr);
