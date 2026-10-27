@@ -1,0 +1,638 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #08090d;
+  color: #ffffff;
+  font-family: 'Rajdhani', sans-serif;
+}
+
+#game-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+#canvas3d {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ==========================================================
+   UI OVERLAYS & MODALS
+   ========================================================== */
+.ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.interactive {
+  pointer-events: auto;
+}
+
+/* Modal Backdrops */
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.85) 0%, rgba(5, 7, 12, 0.96) 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+
+.panel {
+  background: rgba(18, 22, 34, 0.92);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.15), inset 0 0 15px rgba(0, 229, 255, 0.05);
+  border-radius: 12px;
+  padding: 30px 40px;
+  max-width: 540px;
+  width: 90%;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #ff0055, #00e5ff, #ffe600);
+}
+
+.panel-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+  margin-bottom: 8px;
+}
+
+.panel-subtitle {
+  color: #8b9bb4;
+  font-size: 14px;
+  margin-bottom: 24px;
+  letter-spacing: 1px;
+}
+
+/* Forms & Inputs */
+.input-group {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.input-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #00e5ff;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(10, 14, 24, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 6px;
+  color: #fff;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.text-input:focus {
+  border-color: #00e5ff;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+}
+
+/* Color Picker Row */
+.color-picker-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.color-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.color-dot:hover {
+  transform: scale(1.15);
+}
+
+.color-dot.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 12px #fff;
+  transform: scale(1.2);
+}
+
+/* Buttons */
+.btn-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.btn {
+  flex: 1;
+  padding: 14px 20px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #00d4ff, #0077ff);
+  color: #050a14;
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #33ddff, #1a88ff);
+  box-shadow: 0 0 25px rgba(0, 212, 255, 0.7);
+  transform: translateY(-2px);
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, #ff0055, #ff3377);
+  color: #ffffff;
+  box-shadow: 0 0 15px rgba(255, 0, 85, 0.4);
+}
+
+.btn-accent:hover {
+  background: linear-gradient(135deg, #ff1a6b, #ff4d88);
+  box-shadow: 0 0 25px rgba(255, 0, 85, 0.7);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: rgba(30, 41, 59, 0.8);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.btn-secondary:hover {
+  background: rgba(45, 60, 85, 0.9);
+  color: #fff;
+  border-color: #00e5ff;
+}
+
+/* Room Code Badge */
+.room-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px dashed #00e5ff;
+  border-radius: 6px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #00e5ff;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.room-code-badge:hover {
+  background: rgba(0, 229, 255, 0.2);
+}
+
+/* Player List In Lobby */
+.player-list {
+  list-style: none;
+  margin: 15px 0 25px 0;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(8, 11, 18, 0.5);
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-color-preview {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.player-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #e2e8f0;
+}
+
+.player-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge-host {
+  background: rgba(255, 230, 0, 0.2);
+  color: #ffe600;
+  border: 1px solid #ffe600;
+}
+
+.badge-ready {
+  background: rgba(57, 255, 20, 0.2);
+  color: #39ff14;
+}
+
+/* ==========================================================
+   IN-GAME HUD
+   ========================================================== */
+.hud-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: none; /* Shown when race active */
+}
+
+/* Top Stats Bar */
+.top-hud-bar {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 30px;
+}
+
+.position-card {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  background: rgba(13, 17, 27, 0.75);
+  border-left: 4px solid #ff0055;
+  padding: 8px 18px;
+  border-radius: 0 8px 8px 0;
+  backdrop-filter: blur(4px);
+}
+
+.pos-rank {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 38px;
+  font-weight: 900;
+  color: #ff0055;
+  text-shadow: 0 0 15px rgba(255, 0, 85, 0.6);
+  line-height: 1;
+}
+
+.pos-total {
+  font-size: 18px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.race-info-center {
+  display: flex;
+  gap: 20px;
+  background: rgba(13, 17, 27, 0.75);
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+.info-box {
+  text-align: center;
+}
+
+.info-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00e5ff;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.info-val {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+/* Top Right: Live Leaderboard */
+.leaderboard-widget {
+  background: rgba(13, 17, 27, 0.75);
+  border-radius: 8px;
+  padding: 10px 14px;
+  width: 220px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.leaderboard-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 4px;
+}
+
+.lb-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lb-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lb-rank {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  width: 18px;
+  color: #ffe600;
+}
+
+.lb-color-tag {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.lb-name {
+  color: #e2e8f0;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-entry.is-me .lb-name {
+  color: #00e5ff;
+  font-weight: 700;
+}
+
+.lb-lap {
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* Bottom Left: Mini-Map Radar */
+.minimap-container {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  width: 170px;
+  height: 170px;
+  background: rgba(10, 14, 24, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.1);
+  border-radius: 50%;
+  overflow: hidden;
+  backdrop-filter: blur(4px);
+}
+
+#minimap-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Bottom Right: High-Tech Speedometer */
+.speedometer-container {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 220px;
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.speed-digital-wrap {
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.speed-number {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 54px;
+  font-weight: 900;
+  line-height: 0.9;
+  color: #ffffff;
+  text-shadow: 0 0 15px rgba(0, 229, 255, 0.5);
+  font-style: italic;
+}
+
+.speed-unit {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #00e5ff;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.speed-gear {
+  position: absolute;
+  top: -10px;
+  right: -30px;
+  background: #ff0055;
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
+}
+
+/* Speed Bar / RPM Arc */
+.speed-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  margin-top: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.speed-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #00e5ff 0%, #ffe600 70%, #ff0055 100%);
+  border-radius: 4px;
+  transition: width 0.05s linear;
+  box-shadow: 0 0 10px #00e5ff;
+}
+
+/* Drift / Notification Banner */
+.banner-center {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.countdown-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 96px;
+  font-weight: 900;
+  color: #ffe600;
+  text-shadow: 0 0 35px rgba(255, 230, 0, 0.8), 0 0 70px rgba(255, 0, 85, 0.6);
+  animation: pulseScale 0.8s ease-out;
+  display: none;
+}
+
+.drift-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 26px;
+  font-weight: 900;
+  color: #ff0055;
+  text-shadow: 0 0 20px #ff0055;
+  letter-spacing: 3px;
+  opacity: 0;
+  transform: scale(0.8) rotate(-4deg);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.drift-badge.active {
+  opacity: 1;
+  transform: scale(1.1) rotate(-4deg);
+}
+
+/* Control Helpers in Top Nav */
+.top-controls-hint {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 15px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 14px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.kbd {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+/* Results Podium Table */
+.podium-table {
+  width: 100%;
+  margin: 20px 0;
+  border-collapse: collapse;
+}
+
+.podium-table th {
+  font-size: 12px;
+  color: #94a3b8;
+  letter-spacing: 1px;
+  padding: 8px;
+  text-transform: uppercase;
+}
+
+.podium-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rank-gold { color: #ffe600; font-weight: 800; }
+.rank-silver { color: #cbd5e1; font-weight: 800; }
+.rank-bronze { color: #cd7f32; font-weight: 800; }
+
+@keyframes pulseScale {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1.0); opacity: 1; }
+}

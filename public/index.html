@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEED FOR SPEED // OVERDRIVE - Multiplayer 3D Racer</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Three.js 3D Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <!-- 3D WebGL Canvas Layer -->
+  <div id="game-container">
+    <canvas id="canvas3d"></canvas>
+  </div>
+
+  <!-- UI Overlays -->
+  <div class="ui-overlay">
+
+    <!-- Top Controls Hints (Visible in Game) -->
+    <div id="controls-hint" class="top-controls-hint" style="display: none;">
+      <span><span class="kbd">W</span>/<span class="kbd">↑</span> Throttle</span>
+      <span><span class="kbd">S</span>/<span class="kbd">↓</span> Brake / Rev</span>
+      <span><span class="kbd">A</span><span class="kbd">D</span> Steer</span>
+      <span><span class="kbd">SPACE</span> Drift Handbrake</span>
+      <span><span class="kbd">R</span> Reset</span>
+      <span><span class="kbd">C</span> Camera</span>
+      <span><span class="kbd">M</span> Audio</span>
+      <span id="ping-display" style="color: #00e5ff; margin-left: 8px;">24 ms</span>
+    </div>
+
+    <!-- IN-GAME HUD -->
+    <div id="hud-layer" class="hud-layer">
+      <!-- Top Stats Bar -->
+      <div class="top-hud-bar">
+        <!-- Position (1st / 4) -->
+        <div class="position-card">
+          <div id="hud-pos-rank" class="pos-rank">1</div>
+          <div id="hud-pos-total" class="pos-total">/ 4</div>
+        </div>
+
+        <!-- Lap & Race Time -->
+        <div class="race-info-center">
+          <div class="info-box">
+            <div class="info-label">Lap</div>
+            <div id="hud-lap-count" class="info-val">1 / 3</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Time</div>
+            <div id="hud-race-time" class="info-val">00:00.00</div>
+          </div>
+        </div>
+
+        <!-- Real-Time Leaderboard Widget -->
+        <div class="leaderboard-widget">
+          <div class="leaderboard-title">Standings</div>
+          <div id="leaderboard-list">
+            <!-- Dynamic entries -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Banner (Countdown / Drift / Alerts) -->
+      <div class="banner-center">
+        <div id="countdown-banner" class="countdown-text">3</div>
+        <div id="drift-banner" class="drift-badge">DRIFT // +100</div>
+      </div>
+
+      <!-- Bottom-Left Radar Mini-Map -->
+      <div class="minimap-container">
+        <canvas id="minimap-canvas" width="170" height="170"></canvas>
+      </div>
+
+      <!-- Bottom-Right Speedometer -->
+      <div class="speedometer-container">
+        <div class="speed-digital-wrap">
+          <span id="hud-gear" class="speed-gear">1</span>
+          <div id="hud-speed-num" class="speed-number">0</div>
+          <div class="speed-unit">KM / H</div>
+        </div>
+        <div class="speed-bar-bg">
+          <div id="hud-speed-bar" class="speed-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN MENU / LOBBY MODAL -->
+    <div id="menu-modal" class="modal-backdrop interactive">
+      <div class="panel">
+        <h1 class="panel-title">NEED FOR SPEED</h1>
+        <p class="panel-subtitle">REAL-TIME MULTIPLAYER 3D RACING</p>
+
+        <!-- Driver Name Input -->
+        <div class="input-group">
+          <label class="input-label" for="player-name-input">Driver Call-Sign</label>
+          <input type="text" id="player-name-input" class="text-input" maxlength="15" value="SpeedRacer" placeholder="Enter your name...">
+        </div>
+
+        <!-- Car Color Palette -->
+        <div class="input-group">
+          <label class="input-label">Vehicle Paint</label>
+          <div class="color-picker-row" id="color-palette-selector">
+            <div class="color-dot active" data-color="#ff0055" style="background:#ff0055;"></div>
+            <div class="color-dot" data-color="#00d4ff" style="background:#00d4ff;"></div>
+            <div class="color-dot" data-color="#ffe600" style="background:#ffe600;"></div>
+            <div class="color-dot" data-color="#39ff14" style="background:#39ff14;"></div>
+            <div class="color-dot" data-color="#ff7700" style="background:#ff7700;"></div>
+            <div class="color-dot" data-color="#b026ff" style="background:#b026ff;"></div>
+            <div class="color-dot" data-color="#ffffff" style="background:#ffffff;"></div>
+          </div>
+        </div>
+
+        <!-- Quick Match Button -->
+        <button id="btn-quick-match" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+          ⚡ Quick Match (Play Now)
+        </button>
+
+        <div class="btn-row">
+          <button id="btn-create-room" class="btn btn-secondary">
+            + Create Room
+          </button>
+          <button id="btn-join-room-modal" class="btn btn-secondary">
+            Join with Code
+          </button>
+        </div>
+
+        <!-- Join with Code Input Box (Toggled on click) -->
+        <div id="join-code-container" style="display: none; margin-top: 15px;">
+          <input type="text" id="join-room-code-input" class="text-input" maxlength="6" placeholder="Enter 6-letter Room Code" style="text-transform: uppercase; text-align: center; letter-spacing: 2px;">
+          <button id="btn-submit-join" class="btn btn-accent" style="width: 100%; margin-top: 8px;">
+            Join Room
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- IN-ROOM WAITING LOBBY MODAL -->
+    <div id="room-lobby-modal" class="modal-backdrop interactive" style="display: none;">
+      <div class="panel">
+        <h2 class="panel-title">RACE LOBBY</h2>
+        <p class="panel-subtitle">Share room code with friends to race together</p>
+
+        <!-- Room Code Badge -->
+        <div id="room-code-display" class="room-code-badge" title="Click to copy code">
+          ROOM: <span id="room-code-text">------</span> 📋
+        </div>
+
+        <!-- Connected Racers List -->
+        <div class="input-label" style="text-align: left;">Drivers In Room (<span id="player-count-num">1</span>/8)</div>
+        <ul id="lobby-player-list" class="player-list">
+          <!-- Populated by server state -->
+        </ul>
+
+        <!-- Action Buttons -->
+        <div class="btn-row">
+          <button id="btn-ready-toggle" class="btn btn-secondary">
+            Ready Up
+          </button>
+          <button id="btn-start-race" class="btn btn-accent" style="display: none;">
+            🏁 Start Race
+          </button>
+        </div>
+
+        <button id="btn-leave-room" class="btn btn-secondary" style="width: 100%; margin-top: 12px; font-size: 12px; padding: 10px;">
+          Leave Room
+        </button>
+      </div>
+    </div>
+
+    <!-- POST-RACE RESULTS MODAL -->
+    <div id="results-modal" class="modal-backdrop interactive" style="display: none;">
+      <div class="panel" style="max-width: 600px;">
+        <h2 class="panel-title" style="color: #ffe600;">🏆 RACE RESULTS</h2>
+        <p class="panel-subtitle">Final Standings and Timings</p>
+
+        <table class="podium-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Driver</th>
+              <th>Status</th>
+              <th>Total Time</th>
+            </tr>
+          </thead>
+          <tbody id="results-table-body">
+            <!-- Populated on finish -->
+          </tbody>
+        </table>
+
+        <button id="btn-results-return" class="btn btn-primary" style="width: 100%;">
+          Back to Lobby
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Client Modular Application -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
